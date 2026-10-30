@@ -107,10 +107,6 @@ DashBoard/
 
 This project is specifically optimized for systems exposing hardware and thermal data through Linux sysfs. On unsupported platforms, some values (such as temperatures or CPU frequencies) may be missing or show as unavailable.
 
-## License
-
-This project is distributed without an explicit license file. Please check the repository for usage terms before commercial or public deployment.
-
 ---
 
 # Русский перевод
@@ -223,7 +219,3 @@ DashBoard/
 ## Примечания
 
 Этот проект специально оптимизирован для систем, которые предоставляют данные о железе и температуре через Linux sysfs. На неподдерживаемых устройствах некоторые значения, такие как температура или частота CPU, могут отсутствовать или отображаться как недоступные.
-
-## Лицензия
-
-Проект распространяется без отдельного файла лицензии. Пожалуйста, проверьте настройки репозитория перед коммерческим или публичным использованием.
