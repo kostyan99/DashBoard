@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Orange Pi Status</title>
+<style>
+:root{
+  --bg:#0b0d12; --panel:#11141b; --panel2:#1a1e28; --border:#222836;
+  --text:#eef0f5; --muted:#9aa4b8; --ok:#34d399; --warn:#fbbf24; --crit:#f87171;
+  --rx:#34d399; --tx:#818cf8; --blue:#60a5fa;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:1rem/1.45 var(--sans)}
+.num,.big,.v,.f,.val,td,.meta b,select,.upd{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto;padding:1.5rem 1rem 3rem}
+
+/* header */
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem 1.5rem;flex-wrap:wrap;margin-bottom:1.5rem}
+h1{margin:0;font-size:1.6rem;font-weight:600;letter-spacing:.2px}
+.meta{display:flex;flex-wrap:wrap;gap:.3rem 1.4rem;margin-top:.55rem;color:var(--muted);font-size:.95rem}
+.meta b{color:var(--text);font-weight:500;font-size:.95rem}
+.ctl{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.upd{color:var(--muted);font-size:.85rem}
+.pill{display:flex;align-items:center;gap:.55rem;font-size:.95rem;font-weight:500;
+  border:1px solid var(--border);background:var(--panel);padding:.45rem .9rem;border-radius:999px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.crit{background:var(--crit)}
+select{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:999px;
+  padding:.45rem .8rem;font-size:.9rem}
+
+/* layout */
+.grid{display:grid;gap:1rem;margin-bottom:1rem}
+.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cols{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.25rem;min-width:0;contain:layout paint}
+.wide{grid-column:1/-1}
+.title{margin:0 0 1rem;font-size:.8125rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
+.title span{font-family:var(--mono);letter-spacing:0;text-transform:none;font-weight:400;font-size:.875rem}
+
+/* tiles */
+.big{font-size:clamp(1.7rem,6.2vw,2.4rem);font-weight:500;line-height:1.1;white-space:nowrap}
+.big small{font-size:.5em;color:var(--muted);margin-left:.2em;font-weight:400}
+.note{color:var(--muted);font-size:.875rem;margin-top:.45rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.3em}
+.ok{color:var(--ok)} .warn{color:var(--warn)} .crit{color:var(--crit)}
+.bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:.9rem}
+.bar i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(0);background:var(--ok);transition:transform .4s}
+.bar i.ok{background:var(--ok)} .bar i.warn{background:var(--warn)} .bar i.crit{background:var(--crit)}
+@media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+
+/* charts and rows */
+canvas{width:100%;height:120px;display:block}
+.rows{margin-top:1rem}
+.row{display:grid;grid-template-columns:minmax(0,9.5rem) 1fr 4.4rem;align-items:center;gap:.75rem;margin-bottom:.85rem}
+.row:last-child{margin-bottom:0}
+.row .bar{margin:0}
+.row .l{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .v{text-align:right;font-size:1rem}
+.row .f{display:none}
+.cores .row{grid-template-columns:3.4rem 1fr 3.6rem 6.2rem}
+.cores .row .f{display:block;text-align:right;color:var(--muted);font-size:.875rem}
+.leg{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:.5rem;vertical-align:baseline}
+
+/* memory card */
+.seg{display:flex;height:10px;background:var(--panel2);border-radius:5px;overflow:hidden}
+.seg i{display:block;height:100%;width:0;transition:width .4s}
+.su{background:var(--blue)} .sc{background:#3b4a6b} .sf{background:var(--panel2)}
+.legend{display:flex;flex-wrap:wrap;gap:.3rem 1.2rem;margin:.7rem 0 1.1rem;color:var(--muted);font-size:.9rem}
+.legend b{color:var(--text);font-weight:500;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:1fr auto;gap:.65rem 1rem}
+.kv .k{color:var(--muted)} .kv .val{text-align:right}
+
+/* network */
+.net-top{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.5rem;margin-bottom:1rem}
+.net-top .big{font-size:clamp(1.5rem,5.5vw,2rem)}
+.lbl{color:var(--muted);margin-bottom:.3rem;font-size:.95rem}
+
+/* processes */
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.95rem}
+th{color:var(--muted);font-weight:500;text-align:right;padding:0 0 .6rem;font-size:.8125rem;text-transform:uppercase;letter-spacing:.06em}
+td{padding:.5rem 0;border-top:1px solid var(--border);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th:nth-child(n+2),td:nth-child(n+2){width:4.8rem}
+td.n{font-family:var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* tablet */
+@media(max-width:900px){
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols{grid-template-columns:minmax(0,1fr)}
+}
+/* phone */
+@media(max-width:560px){
+  .wrap{padding:1rem .75rem 2.5rem}
+  .grid{gap:.75rem;margin-bottom:.75rem}
+  .card{padding:1rem}
+  h1{font-size:1.4rem}
+  .ctl{width:100%}
+  .net-top{grid-template-columns:minmax(0,1fr)}
+  /* rows become two lines: label + numbers on top, bar underneath */
+  .row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"l v" "b b";gap:.45rem .75rem}
+  .row .l{grid-area:l} .row .v{grid-area:v} .row .bar{grid-area:b}
+  .cores .row{grid-template-columns:auto 1fr auto;grid-template-areas:"l f v" "b b b"}
+  .cores .row .f{grid-area:f}
+  th:nth-child(2),td:nth-child(2){display:none}
+  th:nth-child(n+3),td:nth-child(n+3){width:4.2rem}
+}
+@media(max-width:350px){.tiles{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="host">Orange Pi 4 Pro</h1>
+      <div class="meta">
+        <span>IP <b id="ip">—</b></span>
+        <span>Kernel <b id="kernel">—</b></span>
+        <span>Uptime <b id="uptime">—</b></span>
+      </div>
+    </div>
+    <div class="ctl">
+      <span class="upd" id="upd"></span>
+      <div class="pill"><i class="dot" id="dot"></i><span id="state">Connecting…</span></div>
+      <select id="interval" aria-label="Refresh interval">
+        <option value="2000">2 s</option><option value="3000">3 s</option>
+        <option value="5000">5 s</option><option value="10000">10 s</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="grid tiles">
+    <div class="card">
+      <h2 class="title">CPU Load</h2>
+      <div class="big"><span id="cpu">—</span><small>%</small></div>
+      <div class="note" id="cpu_note"></div>
+      <div class="bar"><i id="cpu_bar"></i></div>
+    </div>
+    <div class="card">
+      <h2 class="title">Temperature <span>max</span></h2>
+      <div class="big"><span id="tmax">—</span><small>°C</small></div>
+      <div class="note" id="tmax_note"></div>
+      <div class="bar"><i id="tmax_bar"></i></div>
+    </div>
+    <div class="card">
+      <h2 class="title">RAM <span id="ram_pct">—</span></h2>
+      <div class="big"><span id="ram">—</span><small id="ram_u"></small></div>
+      <div class="note" id="ram_note"></div>
+      <div class="bar"><i id="ram_bar"></i></div>
+    </div>
+    <div class="card">
+      <h2 class="title">Disk / <span id="disk_pct">—</span></h2>
+      <div class="big"><span id="disk">—</span><small id="disk_u"></small></div>
+      <div class="note" id="disk_note"></div>
+      <div class="bar"><i id="disk_bar"></i></div>
+    </div>
+  </div>
+
+  <div class="grid cols">
+    <div class="card">
+      <h2 class="title">CPU Cores <span class="span">—</span></h2>
+      <canvas id="cpuChart"></canvas>
+      <div class="rows cores" id="cores"></div>
+    </div>
+    <div class="card">
+      <h2 class="title">Temperatures <span class="span">—</span></h2>
+      <canvas id="tempChart"></canvas>
+      <div class="rows" id="temps"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card wide">
+      <h2 class="title">Network <span id="net_scale"></span></h2>
+      <div class="net-top">
+        <div>
+          <div class="lbl"><i class="leg" style="background:var(--rx)"></i>RX (Download)</div>
+          <div class="big" style="color:var(--rx)" id="rx_speed">—</div>
+          <div class="note">total <span id="rx_total">—</span> · peak <span id="rx_peak">—</span></div>
+        </div>
+        <div>
+          <div class="lbl"><i class="leg" style="background:var(--tx)"></i>TX (Upload)</div>
+          <div class="big" style="color:var(--tx)" id="tx_speed">—</div>
+          <div class="note">total <span id="tx_total">—</span> · peak <span id="tx_peak">—</span></div>
+        </div>
+      </div>
+      <canvas id="netChart" style="height:140px"></canvas>
+    </div>
+  </div>
+
+  <div class="grid cols">
+    <div class="card">
+      <h2 class="title">Memory &amp; I/O</h2>
+      <div class="seg"><i class="su" id="seg_used"></i><i class="sc" id="seg_cache"></i></div>
+      <div class="legend">
+        <span><i class="leg su"></i>Used <b id="lg_used">—</b></span>
+        <span><i class="leg sc"></i>Cache <b id="lg_cache">—</b></span>
+        <span><i class="leg" style="background:var(--panel2);outline:1px solid var(--border)"></i>Free <b id="lg_free">—</b></span>
+      </div>
+      <div class="kv">
+        <span class="k">RAM Used / Total</span><span class="val" id="m_ram">—</span>
+        <span class="k">Swap</span><span class="val" id="m_swap">—</span>
+        <span class="k">Disk Read</span><span class="val" id="d_read">—</span>
+        <span class="k">Disk Write</span><span class="val" id="d_write">—</span>
+        <span class="k">Net Errors / Drops</span><span class="val" id="n_err">—</span>
+        <span class="k">Total Processes</span><span class="val" id="procs_n">—</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="title">Top Processes <span>10 s avg</span></h2>
+      <table>
+        <thead><tr><th>Process</th><th>PID</th><th>CPU</th><th>RAM</th></tr></thead>
+        <tbody id="procs"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- helpers: the DOM is touched only when a value really changed ----------
+const els = {};
+const E = id => els[id] || (els[id] = document.getElementById(id));
+const set = (id, s) => { const n = E(id); if (n._t !== s) { n._t = s; n.textContent = s; } };
+const cls = (n, c) => { if (n._c !== c) { n._c = c; n.className = c; } };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const lvl = (v, warn, crit) => v >= crit ? 'crit' : v >= warn ? 'warn' : 'ok';
+function setBar(node, pct, warn, crit) {
+  const key = Math.round(pct * 2);
+  if (node._p !== key) { node._p = key; node.style.transform = `scaleX(${Math.min(100, Math.max(0, pct)) / 100})`; }
+  cls(node, lvl(pct, warn, crit));
+}
+const setW = (id, pct) => { const n = E(id), k = Math.round(pct * 2); if (n._p !== k) { n._p = k; n.style.width = pct + '%'; } };
+
+const splitBytes = b => {
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return [b.toFixed(i > 1 ? 1 : 0), u[i]];
+};
+const fmtBytes = b => splitBytes(b).join(' ');
+const fmtRate = b => fmtBytes(b) + '/s';
+const fmtUptime = s => `${Math.floor(s / 86400)}d ${Math.floor(s % 86400 / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
+const PALETTE = ['#60a5fa', '#f59e0b', '#34d399', '#f472b6', '#a78bfa', '#22d3ee'];
+
+// ---------- charts (plain canvas, no libraries) ----------
+const HIST = 60;
+const hist = { cpu: [], temps: [], rx: [], tx: [] };
+const push = (a, v) => { a.push(v); if (a.length > HIST) a.shift(); };
+
+function spark(canvas, series, colors, min, max) {
+  canvas._args = [series, colors, min, max];
+  const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w) return;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+  const c = canvas.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 1; c.beginPath();
+  for (let i = 1; i < 4; i++) { const y = Math.round(h * i / 4) + .5; c.moveTo(0, y); c.lineTo(w, y); }
+  c.stroke();
+  const step = w / (HIST - 1), span = (max - min) || 1;
+  series.forEach((s, k) => {
+    if (s.length < 2) return;
+    const off = HIST - s.length;
+    const path = () => { c.beginPath(); s.forEach((v, i) => {
+      const x = (i + off) * step, y = h - 2 - (v - min) / span * (h - 4);
+      i ? c.lineTo(x, y) : c.moveTo(x, y); }); };
+    path(); c.lineTo(w, h); c.lineTo(off * step, h); c.closePath();
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, colors[k] + '40'); g.addColorStop(1, colors[k] + '00');
+    c.fillStyle = g; c.fill();
+    path(); c.strokeStyle = colors[k]; c.lineWidth = 1.8; c.lineJoin = 'round'; c.stroke();
+  });
+}
+let resizeT;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() =>
+  document.querySelectorAll('canvas').forEach(c => c._args && spark(c, ...c._args)), 150); });
+
+// ---------- rows are built once, then only updated ----------
+let coreRows = [], tempRows = [];
+function buildRows(box, labels, dots) {
+  box.innerHTML = labels.map((l, i) => `<div class="row"><span class="l">${
+    dots ? `<i class="leg" style="background:${PALETTE[i % PALETTE.length]}"></i>` : ''}${esc(l)}</span>
+    <div class="bar"><i></i></div><span class="v"></span><span class="f"></span></div>`).join('');
+  return [...box.children].map(r => ({ bar: r.querySelector('.bar i'), v: r.querySelector('.v'), f: r.querySelector('.f') }));
+}
+const txt = (n, s) => { if (n._t !== s) { n._t = s; n.textContent = s; } };
+
+// ---------- render ----------
+let prev = null, peakRx = 0, peakTx = 0, interval = 3000;
+
+function paint(d) {
+  set('host', d.hostname); set('ip', d.ip); set('kernel', d.kernel); set('uptime', fmtUptime(d.uptime_sec));
+
+  const fr = d.freqs.filter(Boolean);
+  set('cpu', d.cpu_percent.toFixed(1)); cls(E('cpu'), lvl(d.cpu_percent, 60, 85));
+  setBar(E('cpu_bar'), d.cpu_percent, 60, 85);
+  set('cpu_note', (fr.length ? `${Math.min(...fr)}–${Math.max(...fr)} MHz · ` : '') + `${d.cores.length} cores`);
+
+  const tmax = d.temps.length ? Math.max(...d.temps.map(t => t.value)) : null;
+  if (tmax !== null) {
+    set('tmax', tmax.toFixed(1)); cls(E('tmax'), lvl(tmax, 65, 80)); setBar(E('tmax_bar'), tmax, 65, 80);
+    set('tmax_note', d.temps.find(t => t.value === tmax).name);
+  }
+
+  const [rv, ru] = splitBytes(d.ram.used), [dv, du] = splitBytes(d.disk.used);
+  set('ram', rv); set('ram_u', ru); cls(E('ram'), lvl(d.ram.percent, 75, 90));
+  setBar(E('ram_bar'), d.ram.percent, 75, 90);
+  set('ram_pct', d.ram.percent.toFixed(1) + '%'); set('ram_note', 'of ' + fmtBytes(d.ram.total));
+  set('disk', dv); set('disk_u', du); cls(E('disk'), lvl(d.disk.percent, 80, 92));
+  setBar(E('disk_bar'), d.disk.percent, 80, 92);
+  set('disk_pct', d.disk.percent.toFixed(1) + '%'); set('disk_note', 'of ' + fmtBytes(d.disk.total));
+
+  // health pill
+  let c = 'ok', t = 'Normal';
+  if (tmax !== null && tmax >= 80) { c = 'crit'; t = 'Overheating'; }
+  else if (tmax !== null && tmax >= 65) { c = 'warn'; t = 'Warm'; }
+  else if (d.cpu_percent >= 85 || d.ram.percent >= 90) { c = 'warn'; t = 'Heavy load'; }
+  cls(E('dot'), 'dot ' + c); set('state', t);
+  set('upd', new Date().toLocaleTimeString('en-GB'));
+  document.title = `${d.cpu_percent.toFixed(0)}% · ${tmax !== null ? tmax.toFixed(0) + '°C' : '—'} · ${d.hostname}`;
+
+  // history length label depends on the refresh interval
+  const secs = HIST * interval / 1000, span = secs >= 120 ? Math.round(secs / 60) + ' min' : secs + ' s';
+  document.querySelectorAll('.span').forEach(n => txt(n, span));
+
+  // cores
+  if (coreRows.length !== d.cores.length)
+    coreRows = buildRows(E('cores'), d.cores.map((_, i) => 'CPU' + i), false);
+  push(hist.cpu, d.cpu_percent);
+  spark(E('cpuChart'), [hist.cpu], ['#60a5fa'], 0, 100);
+  d.cores.forEach((p, i) => {
+    const r = coreRows[i];
+    setBar(r.bar, p, 60, 85); txt(r.v, p.toFixed(0) + '%'); txt(r.f, d.freqs[i] ? d.freqs[i] + ' MHz' : '');
+  });
+
+  // temperatures
+  if (tempRows.length !== d.temps.length) {
+    tempRows = buildRows(E('temps'), d.temps.map(t => t.name), true); hist.temps = [];
+  }
+  d.temps.forEach((t, i) => {
+    push(hist.temps[i] || (hist.temps[i] = []), t.value);
+    const r = tempRows[i];
+    setBar(r.bar, t.value, 65, 80); txt(r.v, t.value.toFixed(1) + '°'); cls(r.v, 'v ' + lvl(t.value, 65, 80));
+  });
+  spark(E('tempChart'), hist.temps, hist.temps.map((_, i) => PALETTE[i % PALETTE.length]), 20, 100);
+
+  // network and disk I/O
+  set('rx_total', fmtBytes(d.net.recv)); set('tx_total', fmtBytes(d.net.sent));
+  set('n_err', `${d.net.errors} / ${d.net.drops}`);
+  if (prev && d.ts > prev.ts) {
+    const dt = d.ts - prev.ts;
+    const rx = Math.max(0, (d.net.recv - prev.net.recv) / dt), tx = Math.max(0, (d.net.sent - prev.net.sent) / dt);
+    peakRx = Math.max(peakRx, rx); peakTx = Math.max(peakTx, tx);
+    set('rx_speed', fmtRate(rx)); set('tx_speed', fmtRate(tx));
+    set('rx_peak', fmtRate(peakRx)); set('tx_peak', fmtRate(peakTx));
+    push(hist.rx, rx); push(hist.tx, tx);
+    const top = Math.max(10240, ...hist.rx, ...hist.tx) * 1.15;
+    spark(E('netChart'), [hist.rx, hist.tx], ['#34d399', '#818cf8'], 0, top);
+    set('net_scale', 'scale to ' + fmtRate(top));
+    if (d.disk_io && prev.disk_io) {
+      set('d_read', fmtRate(Math.max(0, (d.disk_io.read - prev.disk_io.read) / dt)));
+      set('d_write', fmtRate(Math.max(0, (d.disk_io.write - prev.disk_io.write) / dt)));
+    }
+  }
+
+  // memory
+  const tot = d.ram.total, free = Math.max(0, tot - d.ram.used - d.ram.cached);
+  setW('seg_used', d.ram.used / tot * 100); setW('seg_cache', d.ram.cached / tot * 100);
+  set('lg_used', fmtBytes(d.ram.used)); set('lg_cache', fmtBytes(d.ram.cached)); set('lg_free', fmtBytes(free));
+  set('m_ram', `${fmtBytes(d.ram.used)} / ${fmtBytes(tot)}`);
+  set('m_swap', d.swap.total ? `${fmtBytes(d.swap.used)} / ${fmtBytes(d.swap.total)}` : 'none');
+  set('procs_n', String(d.proc_count));
+
+  const html = d.procs.map(p => `<tr><td class="n">${esc(p.name)}</td><td>${p.pid}</td>
+    <td class="${lvl(p.cpu, 40, 80)}">${p.cpu.toFixed(1)}%</td><td>${p.mem.toFixed(1)}%</td></tr>`).join('');
+  const tb = E('procs'); if (tb._h !== html) { tb._h = html; tb.innerHTML = html; }
+
+  prev = d;
+}
+
+// ---------- polling: paused in background tabs, backs off when the board is unreachable ----------
+let timer = null, fails = 0, busy = false;
+try { interval = +localStorage.getItem('interval') || interval; } catch (e) {}
+E('interval').value = String(interval);
+
+async function tick() {
+  if (busy || document.hidden) return;
+  busy = true;
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), 5000);
+  try {
+    const res = await fetch('/api/stats', { cache: 'no-store', signal: ac.signal });
+    if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
+    fails = 0;
+    requestAnimationFrame(() => paint(d));
+  } catch (e) {
+    fails++; prev = null;
+    cls(E('dot'), 'dot crit'); set('state', 'Offline');
+  } finally {
+    clearTimeout(to); busy = false; clearTimeout(timer);
+    if (!document.hidden) timer = setTimeout(tick, Math.min(30000, interval * 2 ** fails));
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(timer);
+  if (!document.hidden) { prev = null; tick(); }
+});
+E('interval').addEventListener('change', e => {
+  interval = +e.target.value;
+  try { localStorage.setItem('interval', interval); } catch (err) {}
+  clearTimeout(timer); tick();
+});
+tick();
+</script>
+</body>
+</html>
