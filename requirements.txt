@@ -1,0 +1,4 @@
+flask>=2.2
+psutil>=5.9
+# production WSGI server; without it app.py falls back to the Flask dev server
+waitress>=2.1

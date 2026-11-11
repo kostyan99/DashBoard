@@ -1,0 +1,36 @@
+# Install:
+#   sudo cp deploy/dashboard.service /etc/systemd/system/dashboard.service
+#   sudo systemctl daemon-reload && sudo systemctl restart dashboard
+[Unit]
+Description=Orange Pi Dashboard
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=kostya
+# membership in the "docker" group gives read access to /var/run/docker.sock (Containers card)
+WorkingDirectory=/home/kostya/Dashboard
+ExecStart=/usr/bin/python3 /home/kostya/Dashboard/app.py
+Environment=PYTHONUNBUFFERED=1
+# Cloudflare Tunnel runs on this host, so the dashboard only has to listen on localhost.
+# Make sure the tunnel's public hostname points to http://localhost:8080.
+# Set DASH_HOST=0.0.0.0 if you also want to open it by LAN IP.
+Environment=DASH_HOST=127.0.0.1
+Environment=DASH_PORT=8080
+# Optional basic auth (not needed if the hostname is protected by Cloudflare Access):
+#Environment=DASH_USER=admin
+#Environment=DASH_PASSWORD=change-me
+Restart=always
+RestartSec=5
+
+# hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
