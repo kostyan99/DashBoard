@@ -23,6 +23,7 @@ from flask import Flask, Response, jsonify, render_template, request
 SAMPLE_SEC = float(os.environ.get('DASH_SAMPLE_SEC', 2))
 HISTORY_SEC = int(os.environ.get('DASH_HISTORY_SEC', 3600))
 SLOW_EVERY = 5  # processes, containers and mounts are refreshed every 5th sample (~10 s)
+WATCH_SEC = 60  # ...but only while a page has asked for data within this many seconds
 DOCKER_SOCK = os.environ.get('DASH_DOCKER_SOCK', '/var/run/docker.sock')
 AUTH_USER = os.environ.get('DASH_USER', 'admin')
 AUTH_PASS = os.environ.get('DASH_PASSWORD', '')  # empty = no password (e.g. behind Cloudflare Access)
@@ -305,7 +306,17 @@ class Monitor(threading.Thread):
         self.history = collections.deque(maxlen=max(1, int(HISTORY_SEC / SAMPLE_SEC)))
         self.now = None
         self._last_t = 0.0
-        self.slow ={'procs': [], 'proc_count': 0, 'containers': None, 'mounts': []}
+        self.slow = {'procs': [], 'proc_count': 0, 'containers': None, 'mounts': []}
+        self.slow_v = 0           # bumped on every slow refresh; clients that have it get no copy
+        self.last_seen = -WATCH_SEC  # monotonic time of the last /api/stats request
+        self._wake = False
+
+    def touch(self):
+        """A page is open. If nobody was watching, refresh the slow part on the next tick."""
+        mono = time.monotonic()
+        if mono - self.last_seen > WATCH_SEC:
+            self._wake = True
+        self.last_seen = mono
 
     def run(self):
         psutil.cpu_percent(percpu=True)
@@ -321,7 +332,10 @@ class Monitor(threading.Thread):
                 self.sample(dt)
             except Exception:  # never let one bad read kill the sampler
                 log.exception('sample failed')
-            if n % SLOW_EVERY == 0:
+            # the process list is the most expensive read (~30 ms): skip it while no page is open
+            watched = mono - self.last_seen < WATCH_SEC
+            if self._wake or (watched and n % SLOW_EVERY == 0) or self.slow_v == 0:
+                self._wake = False
                 try:
                     self.sample_slow(mono)
                 except Exception:
@@ -366,6 +380,7 @@ class Monitor(threading.Thread):
                 'containers': get_containers(mono), 'mounts': get_mounts()}
         with self.lock:
             self.slow = slow
+            self.slow_v += 1
 
     def snapshot(self, since=None):
         with self.lock:
@@ -378,7 +393,7 @@ class Monitor(threading.Thread):
                         break
                     points.append(p)
                 points.reverse()
-            return self.now, dict(self.slow), points
+            return self.now, dict(self.slow), self.slow_v, points
 
 
 monitor = Monitor()
@@ -417,9 +432,15 @@ def index():
 @app.route('/api/stats')
 def stats():
     """Current values plus every history point newer than `?since=<t>`
-    (all of them when `since` is missing)."""
+    (all of them when `since` is missing). Processes, containers and mounts
+    change every ~10 s, so they are left out when the client already has
+    version `?v=<slow_v>`."""
     since = request.args.get('since', type=float)
-    now, slow, points = monitor.snapshot(since)
+    have = request.args.get('v', type=int)
+    monitor.touch()
+    now, slow, slow_v, points = monitor.snapshot(since)
+    if have == slow_v:
+        slow = {}
     return jsonify({
         'server_time': time.time(),
         'sample_sec': SAMPLE_SEC,
@@ -429,13 +450,14 @@ def stats():
         'temp_names': [name for name, _ in ZONES],
         'now': now,
         'points': points,
+        'slow_v': slow_v,
         **slow,
     })
 
 
 @app.route('/healthz')
 def healthz():
-    now, _, _ = monitor.snapshot(since=float('inf'))
+    now = monitor.snapshot(since=float('inf'))[0]
     fresh = now is not None and time.time() - now['t'] < SAMPLE_SEC * 5
     return ('ok', 200) if fresh else ('sampler stalled', 503)
 

@@ -299,6 +299,7 @@ const TH = { cpu: [60, 85], core: [60, 85], temp: [65, 80], ram: [75, 90], disk:
 // one point = [t, cpu, rx, tx, read, write, temp0, temp1, ...]
 const I = { T: 0, CPU: 1, RX: 2, TX: 3, RD: 4, WR: 5, TEMPS: 6 };
 let hist = [], lastT = null, sampleSec = 2, historySec = 3600;
+let slowV = null, slow = { procs: [], proc_count: 0, containers: null, mounts: [] };
 let rangeSec = +store.get('range') || 300, interval = +store.get('interval') || 2000;
 
 function lowerBound(t) {           // first index with point time >= t
@@ -308,6 +309,9 @@ function lowerBound(t) {           // first index with point time >= t
 }
 function ingest(d) {
   sampleSec = d.sample_sec; historySec = d.history_sec;
+  // processes / containers / mounts are only sent when they changed
+  if ('mounts' in d) { slow = { procs: d.procs, proc_count: d.proc_count, containers: d.containers, mounts: d.mounts }; slowV = d.slow_v; }
+  Object.assign(d, slow);
   for (const p of d.points) if (lastT === null || p[I.T] > lastT) { hist.push(p); lastT = p[I.T]; }
   if (hist.length) {
     const cut = lowerBound(lastT - historySec);
@@ -597,7 +601,10 @@ async function tick() {
   busy = true;
   const ac = new AbortController(), to = setTimeout(() => ac.abort(), 8000);
   try {
-    const res = await fetch('/api/stats' + (lastT !== null ? '?since=' + lastT : ''),
+    const q = new URLSearchParams();
+    if (lastT !== null) q.set('since', lastT);
+    if (slowV !== null) q.set('v', slowV);
+    const res = await fetch('/api/stats?' + q,
       { cache: 'no-store', signal: ac.signal, credentials: 'same-origin' });
     if (!res.ok) throw new Error(res.status);
     const d = await res.json();

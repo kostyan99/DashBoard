@@ -89,6 +89,18 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(d2['points'], d['points'][-1:])
         self.assertEqual(self.client.get('/healthz').status_code, 200)
 
+    def test_slow_part_is_sent_only_when_changed(self):
+        self.m.sample(app.SAMPLE_SEC)
+        self.m.sample_slow(1.0)
+        d = self.client.get('/api/stats').get_json()
+        self.assertIn('procs', d)
+        same = self.client.get(f"/api/stats?v={d['slow_v']}").get_json()
+        self.assertNotIn('procs', same)
+        self.m.sample_slow(2.0)
+        newer = self.client.get(f"/api/stats?v={d['slow_v']}").get_json()
+        self.assertIn('procs', newer)
+        self.assertEqual(newer['slow_v'], d['slow_v'] + 1)
+
     def test_basic_auth(self):
         with mock.patch.object(app, 'AUTH_PASS', 's3cret'):
             self.assertEqual(self.client.get('/api/stats').status_code, 401)
